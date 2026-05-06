@@ -78,6 +78,9 @@
   "basedpyright.analysis.typeCheckingMode": "standard",
   "basedpyright.analysis.autoImportCompletions": true,
   "basedpyright.analysis.autoSearchPaths": true,
-  "basedpyright.analysis.diagnosticMode": "workspace"
+  "basedpyright.analysis.diagnosticMode": "workspace",
+  "cursorpyright.analysis.extraPaths": [
+    "${workspaceFolder}"
+  ]
   }
 }
