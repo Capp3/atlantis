@@ -40,7 +40,7 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install -U pip setuptools uv
-          uv sync --python 3.12 --extra dev
+          uv sync --python 3.12 --all-extras
       - name: Build Pages
         run: uv run mkdocs build
       - name: Configure GitHub Pages.
