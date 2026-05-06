@@ -1,0 +1,33 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Ruff Fix",
+      "type": "shell",
+      "command": ".venv/bin/python -m ruff check . --fix"
+    },
+    {
+      "label": "Type Check",
+      "type": "shell",
+      "command": ".venv/bin/python -m mypy atlantis"
+    },
+    {
+      "label": "Run Tests",
+      "type": "shell",
+      "command": ".venv/bin/python -m pytest",
+      "problemMatcher": [
+        "$python"
+      ]
+    },
+    {
+      "label": "Serve Docs",
+      "type": "shell",
+      "command": ".venv/bin/python -m mkdocs serve"
+    },
+    {
+      "label": "Launch Atlantis (debug)",
+      "type": "shell",
+      "command": ".venv/bin/python -m atlantis --smoke-test"
+    }
+  ]
+}

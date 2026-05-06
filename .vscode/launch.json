@@ -1,0 +1,27 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Python: Atlantis",
+      "type": "python",
+      "request": "launch",
+      "module": "atlantis",
+      "env": {
+        "PYTHONPATH": "${workspaceFolder}"
+      },
+      "console": "integratedTerminal"
+    },
+    {
+      "name": "Python: Atlantis Smoke Test",
+      "type": "python",
+      "request": "launch",
+      "module": "atlantis",
+      "args": ["--smoke-test"],
+      "env": {
+        "PYTHONPATH": "${workspaceFolder}",
+        "QT_QPA_PLATFORM": "offscreen"
+      },
+      "console": "integratedTerminal"
+    }
+  ]
+}

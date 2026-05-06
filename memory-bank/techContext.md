@@ -27,7 +27,8 @@
 - pyproject.toml : Single source of truth for deps, tools config
 
 ## Development Environment
-- Virtualenv: .venv (Python 3.12)
+- Python environment manager: `uv` (required standard)
+- Virtualenv location: `.venv` (managed through `uv sync`)
 - OS Target: macOS primary for MVP (darwin), cross-platform later
 - No runtime deps beyond stdlib + PyQt6 (dev deps listed in pyproject)
 - Strict quality gates: mypy, ruff, pytest required before changes
@@ -39,6 +40,6 @@
 - Preserve Mermaid compatibility 100%
 
 ## Tooling Notes
-- Use `uv` or pip via pyproject for installs
+- Use `uv` for environment and dependency management (do not use direct `pip` workflows in project docs/scripts)
 - Pre-commit hooks for quality
-- MkDocs for docs serving: mkdocs serve
+- MkDocs for docs serving: `uv run mkdocs serve`

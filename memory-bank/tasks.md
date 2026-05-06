@@ -1,18 +1,23 @@
 # Memory Bank: Tasks
 
 ## Current Task
-**PLAN Mode (Level 4)**: Create comprehensive architectural and phased implementation plan for the Atlantis Mermaid GUI desktop application. Incorporate dedicated tracks for Documentation, Testing, Formatting, CI/CD, and Workspace/IDE integration. Base on VAN review, existing projectbrief.md, and isolation rules.
+**BUILD Mode (Level 4) - Phase 3**: Implement persistence and recovery features including rolling autosave, startup recovery prompt/restore, external file change handling, and recent-file persistence.
 
 ## Status
-- [x] VAN initialization and Memory Bank setup complete
-- [x] Project review (skeleton with pyproject, rules, no source yet)
-- [x] Complexity: Level 4 confirmed (full system foundation)
-- [x] Core Memory Bank documents populated (projectbrief, productContext, systemPatterns, techContext, style-guide, activeContext, progress)
-- [x] Detailed phased implementation plan documented
-- [ ] Technology validation gate completed
-- [x] Creative phases flagged
-- [x] Creative phase decisions documented
-- [x] Transition target identified: BUILD after technology validation
+- [x] VAN
+- [x] PLAN
+- [x] CREATIVE (if required)
+- [x] BUILD (Phase 1)
+- [x] BUILD (Phase 2)
+- [x] BUILD (Phase 3)
+- [ ] REFLECT
+- [ ] ARCHIVE
+
+## Last Completed Archive
+- `memory-bank/archive/archive-build-phase1-2-2026-05-06.md`
+
+## Next Recommended Task
+- Execute technology validation PoC, then continue with BUILD Phase 4.
 
 ## Requirements (from VAN + Project Brief)
 - Bootstrap full Python package structure (atlantis/ with __init__, main entry, core modules)
@@ -34,7 +39,7 @@
 
 ## Implementation Plan (Level 4 Phased)
 
-### Phase 1: Bootstrap & Project Structure (Foundation)
+### Phase 1: Bootstrap & Project Structure (Foundation) - COMPLETE
 - Create `atlantis/` package:
   - `atlantis/__init__.py` (version, __version__ sync with pyproject)
   - `atlantis/main.py` (QApplication entry, main window launch)
@@ -43,13 +48,56 @@
   - `atlantis/model/` : `diagram.py` (Mermaid source + frontmatter dataclass), `file_handler.py` (.mmd I/O, autosave)
   - `atlantis/renderer/` : `mermaid_renderer.py` (WebEngine bridge, JS injection, error parsing)
   - `atlantis/utils/` : `frontmatter.py` (YAML/TOML parsers + schema), `debounce.py`
-- Update `pyproject.toml`: Add runtime deps (PyQt6>=6.6, PyQt6-WebEngine), scripts entry point (`atlantis = "atlantis.main:main"`), package discovery.
+- Update `pyproject.toml`: Add runtime deps (`PyQt6>=6.7,<6.10`, `PyQt6-WebEngine>=6.7,<6.10` for macOS 12 compatibility), scripts entry point (`atlantis = "atlantis.main:main"`), package discovery.
 - Add `.gitignore` updates, MANIFEST.in if needed.
 - **Workspace**: Update `.vscode/atlantis.code-workspace` with Python interpreter, multi-root if helpful; create `.vscode/settings.json` (ruff, mypy, editor.formatOnSave, python.analysis), `tasks.json` (run: ruff check/fix, mypy, pytest, mkdocs serve), `launch.json` (debug PyQt app with PYTHONPATH).
 - Recommended extensions: ms-python.python, ms-python.vscode-pylance, charliermarsh.ruff, njpwerner.autodocstring, etc.
 - **Milestone**: `python -m atlantis` launches empty window (no crash).
 
-### Phase 2: Core Editor + Preview MVP (Primary Feature)
+#### Phase 1 Implementation Results
+- Implemented package tree:
+  - `atlantis/__init__.py`, `__main__.py`, `main.py`
+  - `atlantis/core/{app.py,settings.py,logging.py}`
+  - `atlantis/ui/{main_window.py,editor.py,preview.py,status_bar.py}`
+  - `atlantis/model/{diagram.py,file_handler.py}`
+  - `atlantis/renderer/mermaid_renderer.py`
+  - `atlantis/utils/{frontmatter.py,debounce.py}`
+- Added workspace support:
+  - `.vscode/settings.json`
+  - `.vscode/tasks.json`
+  - `.vscode/launch.json`
+  - `.vscode/extensions.json`
+- Added phase test file:
+  - `tests/test_phase1_smoke.py`
+- Added `--smoke-test` flow to `python -m atlantis` for non-interactive validation.
+- Added headless preview fallback (`ATLANTIS_HEADLESS=1`) to avoid WebEngine crash in CI/headless smoke runs.
+
+#### Phase 1 Commands Executed
+1. Directory scaffolding (`mkdir -p ...`) and verification (`ls -la`).
+2. Dependency install:
+   - `python -m ensurepip --upgrade`
+   - `python -m pip install -e .`
+   - `python -m pip install pytest ruff`
+   - `python -m pip install --upgrade "PyQt6>=6.7.0,<6.10.0" "PyQt6-WebEngine>=6.7.0,<6.10.0"`
+3. Quality and test gate:
+   - `python -m ruff format atlantis tests`
+   - `python -m ruff check atlantis tests`
+   - `QT_QPA_PLATFORM=offscreen python -m pytest -q`
+   - `QT_QPA_PLATFORM=offscreen python -m atlantis --smoke-test`
+
+#### Phase 1 Test Results
+- `ruff check`: PASS
+- `pytest`: PASS (2 passed)
+- `python -m atlantis --smoke-test`: PASS (exit code 0)
+
+#### Phase 1 Exit Criteria
+- [x] Basic architectural framework is functional
+- [x] Directory/file structure created and verified
+- [x] Workspace scaffolding added
+- [x] Test gate passed before phase completion
+- [x] Milestone command validated in headless mode
+
+### Phase 2: Core Editor + Preview MVP (Primary Feature) - COMPLETE
 - Implement resizable QSplitter: left QPlainTextEdit (or advanced editor) with line numbers, Mermaid syntax highlighter (custom QSyntaxHighlighter or Pygments bridge).
 - Right: QWebEngineView loading local HTML template embedding Mermaid.js (CDN for MVP, plan local bundle post-MVP).
 - Bidirectional? No: code changes → debounced render (500ms default, configurable in settings).
@@ -59,6 +107,48 @@
 - **Testing**: pytest fixtures for sample .mmd content; unit tests for Diagram model and frontmatter parser; basic UI smoke test with pytest-qt (create window, type text, verify no crash).
 - **Formatting**: Run ruff format on all new files; add pre-commit hook config if not present (already in dev deps).
 - **Milestone**: User can type Mermaid flowchart, see live preview update, save/load .mmd file.
+
+#### Phase 2 Implementation Results
+- Implemented `MermaidEditor` upgrades:
+  - line-number gutter rendering
+  - lightweight Mermaid syntax highlighter
+  - current-line + error-line highlights via extra selections
+- Implemented `PreviewPane` abstraction:
+  - WebEngine backend when available
+  - headless/text fallback backend for test environments
+  - retained `last_svg` state for last-known-good preview behavior
+- Implemented rendering loop in `MainWindow`:
+  - debounced render scheduling (`Debouncer`, 500ms)
+  - status updates for scheduled/success/error states
+  - render failure keeps last-good preview unchanged
+- Implemented file/menu workflow:
+  - File: New, Open, Save, Save As, Quit
+  - View: Toggle Soft Wrap
+  - helper methods: `load_from_path`, `save_to_path` for deterministic test coverage
+- Improved renderer placeholder behavior:
+  - validates basic Mermaid declarations
+  - returns explicit errors for unsupported/non-Mermaid input
+
+#### Phase 2 Commands Executed
+1. `python -m ruff format atlantis tests`
+2. `python -m ruff check atlantis tests`
+3. `QT_QPA_PLATFORM=offscreen python -m pytest -q`
+
+#### Phase 2 Test Results
+- `ruff check`: PASS
+- `pytest`: PASS (5 passed)
+- Assertions validated:
+  - editor/preview splitter exists
+  - render success path updates preview state
+  - render error retains last-good preview and shows status error
+  - save/load `.mmd` roundtrip works
+
+#### Phase 2 Exit Criteria
+- [x] Resizable split editor/preview shell implemented
+- [x] Debounced source-to-preview render loop implemented
+- [x] Error handling keeps last-known-good preview
+- [x] Basic file actions (new/open/save/save-as) implemented
+- [x] Milestone behavior validated by tests
 
 ### Phase 3: File Model, Persistence & Recovery
 - Implement autosave: rolling file in temp dir (QStandardPaths), interval 60s configurable, disable toggle.
@@ -70,6 +160,45 @@
 - **Testing**: Integration tests for file roundtrip + autosave simulation; recovery scenario tests.
 - **CI/CD contribution**: Add pytest job early.
 - **Milestone**: Full create → edit → autosave → crash-sim → recover → save cycle works reliably.
+
+#### Phase 3 Implementation Results
+- Implemented rolling autosave model:
+  - deterministic autosave file path per document via `autosave_path_for()`
+  - untitled document autosave support
+  - configurable autosave dir via `ATLANTIS_AUTOSAVE_DIR` (test support)
+- Implemented startup recovery behavior:
+  - checks autosave for current document context
+  - headless mode auto-restore for deterministic tests
+  - non-headless prompt-based restore flow
+- Implemented external file change handling:
+  - `QFileSystemWatcher` integration in `MainWindow`
+  - auto-reload when document is clean
+  - warning status when local unsaved changes exist
+- Implemented recent files persistence:
+  - stores/reorders latest 10 file paths in `QSettings`
+- Added Phase 3 tests:
+  - `tests/test_phase3_persistence.py`
+
+#### Phase 3 Commands Executed
+1. `python -m ruff format atlantis tests`
+2. `python -m ruff check atlantis tests`
+3. `QT_QPA_PLATFORM=offscreen python -m pytest -q`
+
+#### Phase 3 Test Results
+- `ruff check`: PASS
+- `pytest`: PASS (9 passed total suite)
+- Assertions validated:
+  - autosave writes rolling file
+  - startup recovery restores unsaved content in headless mode
+  - external file change reloads when editor is clean
+  - recent files list is persisted and ordered
+
+#### Phase 3 Exit Criteria
+- [x] Autosave rolling file model implemented
+- [x] Startup recovery flow implemented
+- [x] External file change detection implemented
+- [x] Recent files persisted in settings
+- [x] Phase tests pass before completion
 
 ### Phase 4: Validation, Feedback & Polish
 - Status bar: error count, cycle button, render time indicator.
@@ -196,8 +325,8 @@ Flag for CREATIVE mode (or inline decisions):
   - Rationale: Protects MVP scope while preserving asset and extension boundaries for future packaging/plugins.
 
 ## Next Steps
-1. **If Creative needed** (recommended for UI/editor decisions): Run `/creative` to explore options and record decisions in `memory-bank/creative/`.
-2. **Otherwise**: Proceed to `/build` for Phase 1 bootstrap implementation.
+1. Execute technology validation PoC (`QWebEngineView` + Mermaid JS bridge).
+2. Proceed to `/build` Phase 3 (autosave, recovery, external file change handling).
 3. Continuous: Update this tasks.md during BUILD with progress; use partial diffs.
 
 ## Verification Checkpoint (PLAN Complete)
@@ -224,6 +353,20 @@ Flag for CREATIVE mode (or inline decisions):
 - Ready for technology validation and BUILD? YES
 ```
 → If all YES: CREATIVE complete. Proceed to technology validation, then BUILD Phase 1.
+
+## Verification Checkpoint (REFLECT Phase 1-2 Complete)
+```
+✓ REFLECT CHECKPOINT (PHASES 1-2)
+- Phase 1 implementation reviewed against plan? YES
+- Phase 2 implementation reviewed against plan? YES
+- Successes and challenges documented? YES
+- Lessons, process, and technical improvements documented? YES
+- Reflection file created in memory-bank/reflection/? YES
+```
+→ Reflection complete for phases 1-2. Continue BUILD lifecycle.
+
+## Reflection Artifacts
+- `memory-bank/reflection/reflection-build-phase1-2-2026-05-06.md`
 
 **Memory Bank path verified**: All edits to `memory-bank/tasks.md`. No core files created outside `memory-bank/`.
 

@@ -37,3 +37,7 @@
 - No comments that narrate obvious code (per clean-code rules).
 - Error messages user-friendly.
 - All user-facing text in English.
+
+## Python Environment Standard
+- Use `uv` as the default Python/package manager for this repository.
+- Prefer `uv sync` and `uv run ...` over direct `pip`/manual virtualenv command sequences in documentation.

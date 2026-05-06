@@ -25,8 +25,8 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: 3.x
-      - run: pip install mkdocs mkdocs-bootswatch
-      - run: mkdocs build
+      - run: uv sync
+      - run: uv run mkdocs build
       - uses: peaceiris/actions-gh-pages@v3
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}

@@ -1,21 +1,27 @@
-# Vibe Dev Template
+# Atlantis Documentation
 
-Welcome to the Vibe Dev Template documentation.
-
-This is a simple development template with basic documentation structure.
+Atlantis is a desktop Mermaid editor focused on a code-first workflow with integrated preview.
 
 ## Getting Started
 
-This template provides a foundation for development projects with:
+### Python Management (Required)
 
-- Basic project structure
-- Documentation setup
-- Development guidelines
+This project standardizes on [`uv`](https://github.com/astral-sh/uv) for Python management.
 
-## Documentation
+- Install dependencies and create/update the environment:
+  - `uv sync`
+- Run tests:
+  - `uv run pytest`
+- Run linting:
+  - `uv run ruff check .`
+- Run the app:
+  - `uv run python -m atlantis`
 
-More documentation will be added here as the project evolves.
+### Project Documentation
+
+- Product scope and goals: `docs/projectbrief.md`
+- Memory Bank context: `memory-bank/`
 
 ## Contributing
 
-Feel free to contribute to this template by submitting issues or pull requests.
+Use `uv` commands in local setup and scripts to keep workflows consistent across contributors and CI.

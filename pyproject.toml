@@ -15,6 +15,13 @@ classifiers = [
     "Programming Language :: Python :: 3.14",
     "Topic :: Software Development :: Libraries :: Python Modules",
 ]
+dependencies = [
+    "PyQt6>=6.7.0,<6.10.0",
+    "PyQt6-WebEngine>=6.7.0,<6.10.0",
+]
+
+[project.scripts]
+atlantis = "atlantis.main:main"
 
 [project.urls]
 Homepage = "https://capp3.github.io/atlantis/"
@@ -24,6 +31,7 @@ Documentation = "https://capp3.github.io/atlantis/"
 [dependency-groups]
 dev = [
     "pytest>=9.0.3",
+    "pytest-qt>=4.5.0",
     "pre-commit>=4.6.0",
     "tox-uv>=1.33.4",
     "mypy>=1.20.2",

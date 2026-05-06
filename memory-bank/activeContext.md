@@ -1,18 +1,21 @@
 # Memory Bank: Active Context
 
 ## Current Focus
-Completing CREATIVE mode for the Atlantis project - a Python-based desktop Mermaid diagram editor using PyQt6. Design decisions are now documented for the MVP editor component, main layout/feedback model, Mermaid renderer/offline bundle path, and packaging/plugin boundaries.
+Executing BUILD Phase 3 persistence/recovery work for Atlantis and validating autosave, recovery, and file-watch behavior.
 
 ## Status
-CREATIVE mode complete. Full Level 4 plan remains in tasks.md, and all flagged creative decisions have been recorded in `memory-bank/creative/`. The recommended MVP direction is: `QPlainTextEdit` + custom gutter/highlighter, classic two-pane `QSplitter`, manual Mermaid rendering in `QWebEngineView`, staged CDN-to-local Mermaid bundle, and deferred native packaging/plugin runtime.
+BUILD Phase 3 complete. Autosave and recovery flow are implemented, external file change monitoring is integrated, and recent files persistence is stored in settings. Test gate passed with full suite.
 
 ## Latest Changes
-- Created `memory-bank/creative/creative-editor-component.md`
-- Created `memory-bank/creative/creative-ui-layout-feedback.md`
-- Created `memory-bank/creative/creative-renderer-offline-bundle.md`
-- Created `memory-bank/creative/creative-packaging-plugin-boundaries.md`
-- Updated `memory-bank/tasks.md` with creative decisions and checkpoint
+- Updated `atlantis/model/file_handler.py` with autosave directory/path/read/write/clear helpers.
+- Updated `atlantis/core/settings.py` with autosave/recent-files setting keys.
+- Updated `atlantis/ui/main_window.py` with:
+  - autosave timer and rolling autosave writes
+  - startup recovery restore behavior
+  - file watcher reload/warn behavior
+  - recent files persistence support
+- Added `tests/test_phase3_persistence.py` and passed full suite.
 
 ## Open Items
-- Execute technology validation PoC for PyQt6 WebEngine + Mermaid render.
-- Proceed to BUILD Phase 1 after validation: package bootstrap, workspace files, initial empty window.
+- Execute technology validation PoC for controlled Mermaid rendering in `QWebEngineView`.
+- Continue BUILD lifecycle with Phase 4 (validation feedback/polish) after technology validation.

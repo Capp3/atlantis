@@ -11,18 +11,8 @@ site_author: Cappy
 repo_url: https://github.com/capp3/atlantis
 repo_name: Atlantis
 
-# Theme Configuration
-# Using mkdocs-bootswatch for modern, responsive design
-# Install: pip install mkdocs-bootswatch
-# Available themes: cerulean, cosmo, cyborg, darkly, flatly, journal, litera,
-#                   lumen, lux, materia, minty, pulse, sandstone, simplex,
-#                   sketchy, slate, solar, spacelab, superhero, united, yeti, zephyr
 theme:
-  name: flatly
-  # Uncomment and change to use a different Bootswatch theme
-  # name: darkly
-  # name: slate
-  # name: superhero
+  name: readthedocs
 
 # Plugins
 plugins:
