@@ -24,7 +24,7 @@ Documentation = "https://capp3.github.io/atlantis/"
 [dependency-groups]
 dev = [
     "pytest>=9.0.3",
-    "pre-commit>=4.5.1",
+    "pre-commit>=4.6.0",
     "tox-uv>=1.33.4",
     "mypy>=1.20.2",
     "ruff>=0.15.7",
