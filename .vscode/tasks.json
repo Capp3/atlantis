@@ -28,6 +28,59 @@
       "label": "Launch Atlantis (debug)",
       "type": "shell",
       "command": ".venv/bin/python -m atlantis --smoke-test"
+    },
+    {
+      "label": "Tech Validation: Mermaid WebEngine",
+      "type": "shell",
+      "command": ".venv/bin/python ${workspaceFolder}/scripts/tech_validation_mermaid_webengine.py",
+      "options": {
+        "cwd": "${workspaceFolder}",
+        "env": {
+          "PYTHONPATH": "${workspaceFolder}"
+        }
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "Launch Atlantis (--log-level DEBUG)",
+      "type": "shell",
+      "command": ".venv/bin/python -m atlantis --log-level DEBUG",
+      "options": {
+        "cwd": "${workspaceFolder}",
+        "env": {
+          "PYTHONPATH": "${workspaceFolder}"
+        }
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "Coverage",
+      "type": "shell",
+      "command": "uv run pytest --cov=atlantis --cov-report=term-missing -q",
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": [
+        "$python"
+      ]
+    },
+    {
+      "label": "Pre-commit (all files)",
+      "type": "shell",
+      "command": "uv run pre-commit run --all-files",
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "Build Docs (strict)",
+      "type": "shell",
+      "command": "uv run mkdocs build --strict",
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": []
     }
   ]
 }

@@ -5,12 +5,7 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
-from atlantis.core.app import create_application
 from atlantis.ui.main_window import MainWindow
-
-os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
-os.environ["ATLANTIS_HEADLESS"] = "1"
-_APP = create_application()
 
 
 def _create_window(tmp_path: Path) -> MainWindow:

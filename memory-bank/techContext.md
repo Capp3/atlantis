@@ -4,7 +4,7 @@
 - **Language & Runtime**: Python >=3.12,<4.0 (primary target 3.12)
 - **UI Framework**: PyQt6 (for native desktop widgets, WebEngine for Mermaid rendering)
 - **Build/Packaging**: Hatchling (PEP 517/518), pyproject.toml managed
-- **Type Checking**: mypy (strict mode: disallow_untyped_defs, etc.)
+- **Type Checking**: mypy (strict mode: disallow_untyped_defs, etc.) — scoped to `atlantis/` in pyproject
 - **Linting/Formatting**: ruff (comprehensive ruleset, line-length 120, preview format)
 - **Testing**: pytest (tests/ dir), coverage via codecov
 - **Docs**: mkdocs + mkdocs-material + mkdocstrings[python]
@@ -12,26 +12,41 @@
 - **Version Control**: Git (main branch, GitHub repo at capp3/atlantis)
 
 ## Mermaid Integration
-- Embedded via Qt WebEngine (QWebEngineView)
-- Mermaid.js loaded locally for offline (post-MVP) or via CDN (MVP acceptable)
-- Rendering triggered on editor focus loss + debounce (500ms default)
-- Error capture and display without breaking preview
+- Embedded via Qt WebEngine (`QWebEngineView`)
+- **MVP**: Mermaid.js loaded from CDN (pinned version below); offline bundle deferred (see `memory-bank/creative/creative-renderer-offline-bundle.md`)
+- **Pinned CDN (tech validation + future renderer work)**: `https://cdn.jsdelivr.net/npm/mermaid@10.9.3/dist/mermaid.min.js` (Mermaid **10.9.3**)
+- Rendering: `mermaid.initialize({ startOnLoad: false, securityLevel: "loose" })` then `mermaid.render(id, source)` in page JS; results returned to Python via **QWebChannel** on a small `QObject` bridge (`report_svg` / `report_error` slots)
+- **JS diagnostics**: subclass `QWebEnginePage` and override `javaScriptConsoleMessage` (PyQt6 does not expose console output as a connectable signal on the default page)
+- Editor-driven preview in the app remains debounced (500ms default) once the production bridge replaces the placeholder renderer
 
-## Project Structure (Planned)
-- atlantis/ : Main package (currently absent - setup phase)
-- tests/ : Unit and integration tests
-- docs/ : MkDocs source (existing projectbrief.md to be synced/expanded)
-- memory-bank/ : Core Memory Bank (newly created)
-- .cursor/rules/ : Extensive Cursor AI rules including isolation_rules for structured workflow
-- .github/ : Dependabot, workflows
-- pyproject.toml : Single source of truth for deps, tools config
+## Technology Validation PoC (committed)
+- **Script**: `scripts/tech_validation_mermaid_webengine.py`
+- **Run**: `uv run python scripts/tech_validation_mermaid_webengine.py` (omit `QT_QPA_PLATFORM=offscreen` for best results on macOS)
+- **Automation-friendly**: `uv run python scripts/tech_validation_mermaid_webengine.py --no-window` (still needs a working WebEngine stack; may fail in some headless CI images)
+- **Measured outcome (2026-05-11, local macOS)**: first successful `mermaid.render` → Python callback **~3.3s** (under the **4s** PoC target; includes CDN fetch + init)
+- **VS Code**: task **Tech Validation: Mermaid WebEngine** in `.vscode/tasks.json`
+
+## Project Structure (current)
+- `atlantis/` : Main application package (implemented through BUILD Phase 3)
+- `scripts/` : Standalone validation utilities (WebEngine + Mermaid PoC)
+- `tests/` : Unit and integration tests
+- `docs/` : MkDocs source
+- `memory-bank/` : Core Memory Bank
+- `.cursor/rules/` : Cursor AI rules including isolation_rules
+- `.github/` : Dependabot, workflows
+- `pyproject.toml` : Single source of truth for deps, tools config
 
 ## Development Environment
 - Python environment manager: `uv` (required standard)
 - Virtualenv location: `.venv` (managed through `uv sync`)
 - OS Target: macOS primary for MVP (darwin), cross-platform later
-- No runtime deps beyond stdlib + PyQt6 (dev deps listed in pyproject)
-- Strict quality gates: mypy, ruff, pytest required before changes
+- **macOS 12.x note**: PyQt6 / PyQt6-WebEngine pinned to **>=6.7,<6.10** (newer wheels may require macOS 13+)
+- Runtime deps: stdlib + PyQt6 + PyQt6-WebEngine (dev deps in pyproject dependency-groups)
+- Strict quality gates: ruff + pytest required before merges; mypy on `atlantis/` (see known legacy noise in some UI modules — do not regress new code)
+
+## Headless / CI Policy
+- **`ATLANTIS_HEADLESS=1`**: App tests use text preview fallback instead of WebEngine where applicable
+- **WebEngine-specific automated tests**: **opt-in only** (e.g. `ATLANTIS_WEBENGINE_TESTS=1` or a dedicated pytest marker) so default `pytest` stays green on hosts without a usable WebEngine display stack
 
 ## Constraints
 - Offline-first final product (bundle assets)
@@ -43,3 +58,4 @@
 - Use `uv` for environment and dependency management (do not use direct `pip` workflows in project docs/scripts)
 - Pre-commit hooks for quality
 - MkDocs for docs serving: `uv run mkdocs serve`
+- Package build verification: `uv build` (produces `dist/` artifacts)

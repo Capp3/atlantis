@@ -2,23 +2,46 @@
 # MkDocs Configuration
 # =============================================================================
 
-# Site Information
 site_name: Atlantis
 site_description: A Mermaid GUI
 site_author: Cappy
 
-# Repository
 repo_url: https://github.com/capp3/atlantis
 repo_name: Atlantis
 
 theme:
-  name: readthedocs
+  name: material
+  features:
+    - navigation.instant
+    - navigation.sections
+    - navigation.expand
+    - toc.integrate
+    - content.code.copy
+    - content.code.annotate
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: indigo
+      accent: indigo
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: indigo
+      accent: indigo
 
-# Plugins
 plugins:
   - search
+  - mkdocstrings:
+      handlers:
+        python:
+          paths: ["."]
+          options:
+            docstring_style: google
+            show_signature_annotations: true
+            separate_signature: true
+            show_source: false
+            show_submodules: true
+            merge_init_into_class: true
 
-# Markdown Extensions
 markdown_extensions:
   - codehilite:
       guess_lang: false
@@ -48,15 +71,25 @@ markdown_extensions:
       custom_checkbox: true
   - pymdownx.tilde
 
-# Page Tree / Navigation
 nav:
   - Home: index.md
+  - Getting Started: getting-started.md
+  - User Guide:
+      - Editor: user-guide/editor.md
+      - Renderer: user-guide/renderer.md
+      - Front matter: user-guide/front-matter.md
+      - Examples: user-guide/examples.md
+      - Troubleshooting: user-guide/troubleshooting.md
+  - Reference:
+      - Architecture: reference/architecture.md
+      - API: reference/api.md
+      - Project brief: projectbrief.md
+  - ADRs:
+      - 0001 — Mermaid via CDN for MVP: adr/0001-mermaid-cdn-mvp.md
+      - 0002 — PyQt6 pin for macOS 12: adr/0002-pyqt6-pin-macos-12.md
+  - Contributing: contributing.md
 
-# Extra Configuration
 extra:
   social:
-    # Add your social links here
     - icon: fontawesome/brands/github
       link: https://github.com/capp3
-
-

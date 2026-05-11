@@ -1,0 +1,28 @@
+# Pre-commit hooks for Atlantis. Run `uv run pre-commit install` once after
+# cloning; subsequent commits will run these hooks automatically.
+#
+# To run on the whole tree manually: `uv run pre-commit run --all-files`.
+#
+# Note: a mypy hook is intentionally not enabled yet. CI runs mypy as a
+# non-blocking job until the Phase 4 carry-over Qt typing cleanup ships.
+# Once that lands, add a `mirrors-mypy` hook here (and flip the CI job to
+# blocking) to keep local + CI parity.
+
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-toml
+      - id: check-merge-conflict
+      - id: mixed-line-ending
+        args: ["--fix=lf"]
+
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.15.12
+    hooks:
+      - id: ruff
+        args: ["--fix"]
+      - id: ruff-format

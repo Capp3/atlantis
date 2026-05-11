@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
+import difflib
+import logging
+import os
 from pathlib import Path
 
 from PyQt6.QtCore import QFileSystemWatcher, Qt, QTimer
-from PyQt6.QtGui import QAction, QActionGroup, QCloseEvent
-from PyQt6.QtWidgets import QFileDialog, QMainWindow, QMessageBox, QSplitter
+from PyQt6.QtGui import QAction, QActionGroup, QCloseEvent, QKeySequence, QPalette
+from PyQt6.QtWidgets import QApplication, QFileDialog, QMainWindow, QMenu, QMessageBox, QSplitter
 
 from atlantis.core.settings import (
     AUTOSAVE_ENABLED_KEY,
@@ -26,10 +29,18 @@ from atlantis.model.file_handler import (
     write_mermaid_file,
 )
 from atlantis.renderer.mermaid_renderer import MermaidRenderer
+from atlantis.renderer.webengine_bridge import BridgeRenderResult
 from atlantis.ui.editor import MermaidEditor
+from atlantis.ui.preferences import AutosavePreferencesDialog
 from atlantis.ui.preview import create_preview_widget
 from atlantis.ui.status_bar import initialize_status_bar
 from atlantis.utils.debounce import Debouncer
+from atlantis.utils.frontmatter import split_front_matter, try_parse_metadata
+
+logger = logging.getLogger(__name__)
+
+_RECENT_FILES_LIMIT = 10
+_RECOVERY_DIFF_CONTEXT = 3
 
 
 class MainWindow(QMainWindow):
@@ -43,14 +54,20 @@ class MainWindow(QMainWindow):
         self._renderer = MermaidRenderer()
         self._watcher = QFileSystemWatcher(self)
         self._watcher.fileChanged.connect(self._on_external_file_changed)
+        self._error_messages: list[str] = []
+        self._error_cursor = 0
+        self._last_render_ms: float | None = None
 
         self.splitter = QSplitter(Qt.Orientation.Horizontal, self)
         self.editor = MermaidEditor(self.splitter)
-        self.preview = create_preview_widget(self.splitter)
+        self.preview = create_preview_widget(self.splitter, theme=self._preview_theme())
+        if self.preview.uses_webengine:
+            self.preview.sourceRendered.connect(self._on_preview_rendered)
         self.splitter.setStretchFactor(0, 1)
         self.splitter.setStretchFactor(1, 1)
         self.setCentralWidget(self.splitter)
 
+        self._recent_menu: QMenu | None = None
         self._build_menus()
         initialize_status_bar(self)
         self._restore_window_state()
@@ -59,6 +76,8 @@ class MainWindow(QMainWindow):
         self._autosave_timer = QTimer(self)
         self._autosave_timer.timeout.connect(self._autosave_current_document)
         self._configure_autosave()
+        self._prune_stale_recent_files()
+        self._refresh_recent_files_menu()
         self._restore_from_recovery_if_available()
         self._render_current_source()
 
@@ -88,7 +107,10 @@ class MainWindow(QMainWindow):
         interval_ms = settings.value(AUTOSAVE_INTERVAL_KEY, 60000, type=int)
         self._autosave_timer.setInterval(max(1000, interval_ms))
         if enabled:
-            self._autosave_timer.start()
+            if not self._autosave_timer.isActive():
+                self._autosave_timer.start()
+        elif self._autosave_timer.isActive():
+            self._autosave_timer.stop()
 
     def current_autosave_path(self) -> Path:
         """Expose active autosave file path for tests and diagnostics."""
@@ -113,14 +135,23 @@ class MainWindow(QMainWindow):
             self.statusBar().showMessage("Recovered unsaved work (headless mode).")
             return
 
-        answer = QMessageBox.question(
-            self,
-            "Restore recovery",
-            "Unsaved recovery data was found. Restore it?",
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-            QMessageBox.StandardButton.Yes,
-        )
-        if answer == QMessageBox.StandardButton.Yes:
+        disk_text = ""
+        if self._current_path is not None and self._current_path.exists():
+            try:
+                disk_text = self._current_path.read_text(encoding="utf-8")
+            except OSError:
+                disk_text = ""
+        diff_text = build_recovery_diff(disk_text, recovery)
+
+        box = QMessageBox(self)
+        box.setIcon(QMessageBox.Icon.Question)
+        box.setWindowTitle("Restore recovery")
+        box.setText("Unsaved recovery data was found. Restore it?")
+        if diff_text:
+            box.setDetailedText(diff_text)
+        box.setStandardButtons(QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
+        box.setDefaultButton(QMessageBox.StandardButton.Yes)
+        if box.exec() == QMessageBox.StandardButton.Yes:
             self.editor.setPlainText(recovery)
             self.editor.document().setModified(True)
             self.statusBar().showMessage("Recovered unsaved work.")
@@ -136,6 +167,8 @@ class MainWindow(QMainWindow):
         open_action.triggered.connect(self.open_file_dialog)
         file_menu.addAction(open_action)
 
+        self._recent_menu = file_menu.addMenu("Open &Recent")
+
         save_action = QAction("&Save", self)
         save_action.triggered.connect(self.save_file)
         file_menu.addAction(save_action)
@@ -143,6 +176,11 @@ class MainWindow(QMainWindow):
         save_as_action = QAction("Save &As...", self)
         save_as_action.triggered.connect(self.save_file_as)
         file_menu.addAction(save_as_action)
+
+        file_menu.addSeparator()
+        prefs_action = QAction("Autosave &Preferences...", self)
+        prefs_action.triggered.connect(self.open_autosave_preferences)
+        file_menu.addAction(prefs_action)
 
         file_menu.addSeparator()
         quit_action = QAction("&Quit", self)
@@ -157,21 +195,103 @@ class MainWindow(QMainWindow):
         wrap_group.addAction(toggle_wrap)
         view_menu.addAction(toggle_wrap)
 
+        view_menu.addSeparator()
+        self._cycle_errors_action = QAction("Cycle Render Errors", self)
+        self._cycle_errors_action.setShortcut(QKeySequence("Ctrl+E"))
+        self._cycle_errors_action.setEnabled(False)
+        self._cycle_errors_action.triggered.connect(self.cycle_render_errors)
+        view_menu.addAction(self._cycle_errors_action)
+
     def _on_editor_text_changed(self) -> None:
         self.statusBar().showMessage("Rendering scheduled...")
         self._render_debouncer.trigger()
 
     def _render_current_source(self) -> None:
-        source = self.editor.toPlainText()
-        result = self._renderer.render(source)
-        if result.ok and result.svg is not None:
-            self.preview.render_svg(result.svg)
-            self.editor.clear_error_lines()
-            self.statusBar().showMessage("Rendered preview")
+        raw_source = self.editor.toPlainText()
+        parsed = split_front_matter(raw_source)
+        diagram_source = parsed.body if parsed.has_front_matter else raw_source
+        fm_warning: str | None = None
+        if parsed.has_front_matter:
+            _, fm_warning = try_parse_metadata(parsed)
+
+        result = self._renderer.render(diagram_source)
+        if not result.ok or result.svg is None:
+            messages = [result.error or "Render failed"]
+            if fm_warning:
+                messages.append(fm_warning)
+            self._set_render_errors(messages)
+            self.editor.set_error_lines([1] if diagram_source.strip() else [])
+            self.statusBar().showMessage(messages[0])
             return
 
-        self.editor.set_error_lines([1] if source.strip() else [])
-        self.statusBar().showMessage(result.error or "Render failed")
+        self._set_render_errors([fm_warning] if fm_warning else [])
+        self.editor.clear_error_lines()
+
+        if self.preview.uses_webengine:
+            self.statusBar().showMessage("Rendering…")
+            self.preview.render_source(diagram_source)
+            return
+
+        self.preview.render_svg(result.svg)
+        self.statusBar().showMessage(self._format_success_status(fm_warning))
+
+    def _on_preview_rendered(self, result: BridgeRenderResult) -> None:
+        self._last_render_ms = result.elapsed_ms
+        if result.ok:
+            self.statusBar().showMessage(f"Rendered in {result.elapsed_ms:.0f} ms")
+            return
+        existing = list(self._error_messages)
+        existing.insert(0, result.payload)
+        self._set_render_errors(existing)
+        self.statusBar().showMessage(result.payload)
+
+    def _set_render_errors(self, messages: list[str]) -> None:
+        deduped: list[str] = []
+        seen: set[str] = set()
+        for raw in messages:
+            text = (raw or "").strip()
+            if not text or text in seen:
+                continue
+            seen.add(text)
+            deduped.append(text)
+        self._error_messages = deduped
+        self._error_cursor = 0
+        self._cycle_errors_action.setEnabled(len(self._error_messages) > 1)
+
+    def cycle_render_errors(self) -> None:
+        """Status-bar cycle through known render/front-matter errors."""
+        if not self._error_messages:
+            return
+        self._error_cursor = (self._error_cursor + 1) % len(self._error_messages)
+        message = self._error_messages[self._error_cursor]
+        self.statusBar().showMessage(f"[{self._error_cursor + 1}/{len(self._error_messages)}] {message}")
+
+    def render_error_messages(self) -> list[str]:
+        """Read-only snapshot of current render error messages (for tests)."""
+        return list(self._error_messages)
+
+    def last_render_ms(self) -> float | None:
+        """Return the elapsed ms of the most recent WebEngine render, if any."""
+        return self._last_render_ms
+
+    def _format_success_status(self, fm_warning: str | None) -> str:
+        if fm_warning:
+            return f"Rendered preview ({fm_warning})"
+        return "Rendered preview"
+
+    def open_autosave_preferences(self) -> None:
+        """Show the autosave preferences dialog and apply the chosen values."""
+        dialog = AutosavePreferencesDialog(self)
+        if dialog.exec() == AutosavePreferencesDialog.DialogCode.Accepted:
+            self._configure_autosave()
+
+    def _preview_theme(self) -> str:
+        app = QApplication.instance()
+        if app is None:
+            return "default"
+        palette = app.palette()
+        background = palette.color(QPalette.ColorRole.Window)
+        return "dark" if background.lightness() < 128 else "default"
 
     def _toggle_soft_wrap(self, enabled: bool) -> None:
         self.editor.setLineWrapMode(
@@ -198,6 +318,7 @@ class MainWindow(QMainWindow):
         self._current_path = path
         self._set_watched_file(path)
         self._add_recent_file(path)
+        self._refresh_recent_files_menu()
         self.setWindowTitle(f"Atlantis - {path.name}")
         self.statusBar().showMessage(f"Opened {path.name}")
 
@@ -222,6 +343,7 @@ class MainWindow(QMainWindow):
         self._current_path = path
         self._set_watched_file(path)
         self._add_recent_file(path)
+        self._refresh_recent_files_menu()
         clear_autosave(path)
         self.setWindowTitle(f"Atlantis - {path.name}")
         self.statusBar().showMessage(f"Saved {path.name}")
@@ -251,17 +373,50 @@ class MainWindow(QMainWindow):
         settings = get_settings()
         current = settings.value(RECENT_FILES_KEY, [], type=list) or []
         updated = [str(path), *[item for item in current if item != str(path)]]
-        settings.setValue(RECENT_FILES_KEY, updated[:10])
+        settings.setValue(RECENT_FILES_KEY, updated[:_RECENT_FILES_LIMIT])
 
     def recent_files(self) -> list[str]:
-        """Return persisted recent file list."""
+        """Return persisted recent file list (does not prune)."""
         settings = get_settings()
         return settings.value(RECENT_FILES_KEY, [], type=list) or []
 
+    def _prune_stale_recent_files(self) -> int:
+        """Drop entries whose path no longer exists. Returns count of removals."""
+        settings = get_settings()
+        current = settings.value(RECENT_FILES_KEY, [], type=list) or []
+        existing = [item for item in current if Path(item).exists()]
+        removed = len(current) - len(existing)
+        if removed > 0:
+            settings.setValue(RECENT_FILES_KEY, existing[:_RECENT_FILES_LIMIT])
+        return removed
+
+    def _refresh_recent_files_menu(self) -> None:
+        if self._recent_menu is None:
+            return
+        self._recent_menu.clear()
+        recent = self.recent_files()
+        if not recent:
+            empty = QAction("(No recent files)", self)
+            empty.setEnabled(False)
+            self._recent_menu.addAction(empty)
+            return
+        for raw_path in recent:
+            path = Path(raw_path)
+            action = QAction(path.name, self)
+            action.setToolTip(str(path))
+            action.triggered.connect(lambda _checked=False, p=path: self.load_from_path(p))
+            self._recent_menu.addAction(action)
+        self._recent_menu.addSeparator()
+        clear_action = QAction("Clear Recent", self)
+        clear_action.triggered.connect(self._clear_recent_files)
+        self._recent_menu.addAction(clear_action)
+
+    def _clear_recent_files(self) -> None:
+        get_settings().setValue(RECENT_FILES_KEY, [])
+        self._refresh_recent_files_menu()
+
     @staticmethod
     def _headless_mode() -> bool:
-        import os
-
         return os.environ.get("ATLANTIS_HEADLESS") == "1"
 
     def closeEvent(self, event: QCloseEvent) -> None:
@@ -279,3 +434,18 @@ class MainWindow(QMainWindow):
         self._persist_window_state()
         clear_autosave(self._current_path)
         super().closeEvent(event)
+
+
+def build_recovery_diff(disk_text: str, recovery_text: str, *, context: int = _RECOVERY_DIFF_CONTEXT) -> str:
+    """Return a compact unified diff between the on-disk text and the recovery text."""
+    disk_lines = disk_text.splitlines()
+    recovery_lines = recovery_text.splitlines()
+    diff_iter = difflib.unified_diff(
+        disk_lines,
+        recovery_lines,
+        fromfile="disk",
+        tofile="recovery",
+        lineterm="",
+        n=context,
+    )
+    return "\n".join(diff_iter)
