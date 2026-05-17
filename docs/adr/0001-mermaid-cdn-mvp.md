@@ -2,7 +2,9 @@
 
 | Status | Date | Owner |
 |--------|------|-------|
-| Accepted | 2026-05-11 | Atlantis core team |
+| Superseded (runtime default) | 2026-05-11 | Atlantis core team |
+
+> **Note:** CDN loading remains available via `ATLANTIS_USE_MERMAID_CDN=1`. The default runtime policy is defined in [ADR 0003 — Offline Mermaid bundle](0003-mermaid-offline-bundle.md).
 
 ## Context
 

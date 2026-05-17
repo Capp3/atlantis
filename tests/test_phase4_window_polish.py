@@ -11,7 +11,8 @@ from atlantis.core.settings import (
     RECENT_FILES_KEY,
     get_settings,
 )
-from atlantis.ui.main_window import MainWindow, build_recovery_diff
+from atlantis.model.recovery import build_recovery_diff
+from atlantis.ui.main_window import MainWindow
 from atlantis.ui.preferences import AutosavePreferencesDialog
 
 

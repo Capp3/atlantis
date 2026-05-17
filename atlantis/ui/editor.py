@@ -4,15 +4,27 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 
-from PyQt6.QtCore import QRect, QSize, Qt
-from PyQt6.QtGui import QColor, QFont, QPainter, QSyntaxHighlighter, QTextCharFormat, QTextFormat
+from PyQt6.QtCore import QObject, QRect, QSize, Qt
+from PyQt6.QtGui import (
+    QColor,
+    QFont,
+    QPainter,
+    QPaintEvent,
+    QResizeEvent,
+    QSyntaxHighlighter,
+    QTextCharFormat,
+    QTextDocument,
+    QTextFormat,
+)
 from PyQt6.QtWidgets import QPlainTextEdit, QTextEdit, QWidget
+
+from atlantis.ui.qt_accessors import require_text_document
 
 
 class MermaidHighlighter(QSyntaxHighlighter):
     """Minimal Mermaid-aware syntax highlighter for MVP."""
 
-    def __init__(self, parent: object) -> None:
+    def __init__(self, parent: QTextDocument | QObject | None) -> None:
         super().__init__(parent)
         self._keyword_format = QTextCharFormat()
         self._keyword_format.setForeground(QColor("#2f6feb"))
@@ -22,8 +34,10 @@ class MermaidHighlighter(QSyntaxHighlighter):
         self._comment_format.setForeground(QColor("#6a737d"))
         self._comment_format.setFontItalic(True)
 
-    def highlightBlock(self, text: str) -> None:
+    def highlightBlock(self, text: str | None) -> None:
         """Apply basic styles for Mermaid declarations and comments."""
+        if text is None:
+            return
         keywords = (
             "flowchart",
             "graph",
@@ -52,14 +66,16 @@ class LineNumberArea(QWidget):
     def sizeHint(self) -> QSize:
         return QSize(self.editor.line_number_area_width(), 0)
 
-    def paintEvent(self, event: object) -> None:
+    def paintEvent(self, event: QPaintEvent | None) -> None:
+        if event is None:
+            return
         self.editor.line_number_area_paint_event(event)
 
 
 class MermaidEditor(QPlainTextEdit):
     """Native source editor with line numbers and lightweight highlighting."""
 
-    def __init__(self, parent: object | None = None) -> None:
+    def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self._highlighter = MermaidHighlighter(self.document())
         self._error_lines: set[int] = set()
@@ -73,6 +89,10 @@ class MermaidEditor(QPlainTextEdit):
         self.update_line_number_area_width(0)
         self._highlight_current_line()
 
+    def text_document(self) -> QTextDocument:
+        """Return the underlying text document (never ``None`` at runtime)."""
+        return require_text_document(self)
+
     def line_number_area_width(self) -> int:
         digits = len(str(max(1, self.blockCount())))
         return 12 + self.fontMetrics().horizontalAdvance("9") * digits
@@ -85,17 +105,18 @@ class MermaidEditor(QPlainTextEdit):
             self._line_number_area.scroll(0, dy)
         else:
             self._line_number_area.update(0, rect.y(), self._line_number_area.width(), rect.height())
-        if rect.contains(self.viewport().rect()):
+        viewport = self.viewport()
+        if viewport is not None and rect.contains(viewport.rect()):
             self.update_line_number_area_width(0)
 
-    def resizeEvent(self, event: object) -> None:
+    def resizeEvent(self, event: QResizeEvent | None) -> None:
         super().resizeEvent(event)
         contents_rect = self.contentsRect()
         self._line_number_area.setGeometry(
             QRect(contents_rect.left(), contents_rect.top(), self.line_number_area_width(), contents_rect.height())
         )
 
-    def line_number_area_paint_event(self, event: object) -> None:
+    def line_number_area_paint_event(self, event: QPaintEvent) -> None:
         painter = QPainter(self._line_number_area)
         painter.fillRect(self._line_number_area.rect(), QColor("#f5f5f5"))
 
@@ -104,8 +125,11 @@ class MermaidEditor(QPlainTextEdit):
         top = round(self.blockBoundingGeometry(block).translated(self.contentOffset()).top())
         bottom = top + round(self.blockBoundingRect(block).height())
 
-        while block.isValid() and top <= self.viewport().rect().bottom():
-            if block.isVisible() and bottom >= self.viewport().rect().top():
+        viewport = self.viewport()
+        viewport_bottom = viewport.rect().bottom() if viewport is not None else bottom
+
+        while block.isValid() and top <= viewport_bottom:
+            if block.isVisible() and bottom >= (viewport.rect().top() if viewport is not None else top):
                 painter.setPen(QColor("#8b949e"))
                 painter.drawText(
                     0,
@@ -140,8 +164,9 @@ class MermaidEditor(QPlainTextEdit):
         current_line_selection.cursor.clearSelection()
         selections.append(current_line_selection)
 
+        document = self.text_document()
         for line_number in sorted(self._error_lines):
-            block = self.document().findBlockByNumber(line_number - 1)
+            block = document.findBlockByNumber(line_number - 1)
             if not block.isValid():
                 continue
             selection = QTextEdit.ExtraSelection()

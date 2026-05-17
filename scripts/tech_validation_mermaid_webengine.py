@@ -20,11 +20,16 @@ import sys
 import time
 from typing import Any
 
-from PyQt6.QtCore import QObject, QTimer, QUrl, pyqtSignal, pyqtSlot
+from PyQt6.QtCore import QObject, QTimer, pyqtSignal, pyqtSlot
 from PyQt6.QtWebChannel import QWebChannel
 from PyQt6.QtWebEngineCore import QWebEnginePage
 from PyQt6.QtWebEngineWidgets import QWebEngineView
 from PyQt6.QtWidgets import QApplication
+
+from atlantis.renderer.mermaid_assets import (
+    PreviewAssetSession,
+    mermaid_script_src,
+)
 
 
 class TechValidationPage(QWebEnginePage):
@@ -43,10 +48,6 @@ class TechValidationPage(QWebEnginePage):
         )
         super().javaScriptConsoleMessage(level, message, line_number, source_id)
 
-
-# Pinned Mermaid v10 (CDN) — see memory-bank/techContext.md
-MERMAID_VERSION = "10.9.3"
-MERMAID_CDN = f"https://cdn.jsdelivr.net/npm/mermaid@{MERMAID_VERSION}/dist/mermaid.min.js"
 
 SAMPLE_SOURCE = """flowchart TD
     A[Start] --> B{Is it ok?}
@@ -72,7 +73,7 @@ class Bridge(QObject):
         self.rendered.emit(False, message)
 
 
-def _build_html() -> str:
+def _build_html(*, script_src: str) -> str:
     source_json = json.dumps(SAMPLE_SOURCE)
     return f"""<!DOCTYPE html>
 <html lang="en">
@@ -80,7 +81,7 @@ def _build_html() -> str:
   <meta charset="utf-8"/>
   <title>Atlantis tech validation</title>
   <script src="qrc:///qtwebchannel/qwebchannel.js"></script>
-  <script src="{MERMAID_CDN}"></script>
+  <script src="{script_src}"></script>
 </head>
 <body>
 <script>
@@ -128,6 +129,11 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="Do not call show(); still runs the event loop (for automated smoke).",
     )
+    parser.add_argument(
+        "--cdn",
+        action="store_true",
+        help="Load Mermaid from jsDelivr CDN instead of the vendored bundle (default: offline).",
+    )
     args = parser.parse_args(argv)
 
     app = QApplication(sys.argv)
@@ -171,7 +177,10 @@ def main(argv: list[str] | None = None) -> int:
 
     QTimer.singleShot(args.timeout_ms, on_timeout)
 
-    view.setHtml(_build_html(), QUrl("https://atlantis.local/tech-validation"))
+    asset_session = PreviewAssetSession()
+    script_src = mermaid_script_src(use_cdn=args.cdn)
+    view.setHtml(_build_html(script_src=script_src), asset_session.base_url)
+    view.destroyed.connect(asset_session.close)
     view.resize(900, 700)
     if not args.no_window:
         view.show()

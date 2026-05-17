@@ -10,6 +10,7 @@ atlantis/
 ├── model/        # DiagramDocument and persistence primitives
 ├── renderer/     # MermaidRenderer facade + WebEngineMermaidBridge
 ├── ui/           # MainWindow, MermaidEditor, PreviewPane, dialogs
+├── plugins/      # PluginManifest + PluginRegistry (v1 scaffold)
 └── utils/        # frontmatter parsing
 ```
 
@@ -28,7 +29,7 @@ atlantis/
 | `creative-editor-component.md` | `QPlainTextEdit` + custom gutter + `QSyntaxHighlighter` |
 | `creative-ui-layout-feedback.md` | Two-pane `QSplitter` with a status bar |
 | `creative-renderer-offline-bundle.md` | `QWebEngineView` HTML shell with manual Mermaid rendering; staged CDN→local-bundle path |
-| `creative-packaging-plugin-boundaries.md` | MVP runs from Python package; native bundling and plugin runtime deferred |
+| `creative-packaging-plugin-boundaries.md` | Plugin registry scaffold; PyInstaller bundle PoC (ADR 0004) |
 
 ## Cross-cutting policies
 
@@ -36,5 +37,6 @@ atlantis/
 - **Settings**: `atlantis/core/settings.py` centralises `QSettings` keys (window geometry, splitter state, autosave config, recent files).
 - **Logging**: `atlantis/core/logging.py` configures the app-data log path and stderr stream; severity controlled by `--log-level` / `ATLANTIS_LOG_LEVEL`.
 - **Front matter**: `atlantis/utils/frontmatter.py` splits and (for TOML) parses fenced front matter without ever blocking the render path.
+- **Plugins**: `atlantis/plugins/` exposes `PluginRegistry` and `PluginManifest` for future extensions; no dynamic loader in v1. See [Plugins](../user-guide/plugins.md).
 
 The auto-generated API reference is on the [API page](api.md).

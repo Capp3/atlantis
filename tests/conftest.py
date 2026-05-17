@@ -7,6 +7,7 @@ gates tests requiring the real ``QWebEngineView`` runtime.
 
 from __future__ import annotations
 
+import logging
 import os
 from collections.abc import Iterator
 from pathlib import Path
@@ -31,6 +32,23 @@ def qapp():
 def _qapp_autouse(qapp):
     """Ensure every test sees a live ``QApplication`` without asking for it."""
     return qapp
+
+
+@pytest.fixture
+def reset_root_logging() -> Iterator[None]:
+    """Clear root handlers so ``logging.basicConfig`` can run again in tests."""
+    root = logging.getLogger()
+    saved_handlers = root.handlers[:]
+    saved_level = root.level
+    for handler in saved_handlers:
+        root.removeHandler(handler)
+    root.setLevel(logging.WARNING)
+    yield
+    for handler in root.handlers[:]:
+        root.removeHandler(handler)
+    for handler in saved_handlers:
+        root.addHandler(handler)
+    root.setLevel(saved_level)
 
 
 @pytest.fixture

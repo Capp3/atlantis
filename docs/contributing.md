@@ -10,7 +10,7 @@ Atlantis standardises on [`uv`](https://github.com/astral-sh/uv) for Python envi
 |------|---------|
 | `uv` | Environment + dependency management |
 | `ruff` (lint + format) | Code quality gate (also enforced by pre-commit and CI) |
-| `mypy` | Static typing (runs **non-blocking** in CI until UI typing cleanup ships) |
+| `mypy` | Static typing (**blocking** in CI and pre-commit on `atlantis/`) |
 | `pytest` + `pytest-qt` | Test runner (offscreen Qt, opt-in WebEngine marker) |
 | `mkdocs` + `mkdocstrings` | Documentation site |
 | `pre-commit` | Local commit-time gate (mirrors the CI lint job) |
@@ -30,23 +30,56 @@ uv run pre-commit run --all-files
 Run these before opening a PR; CI enforces the same gates.
 
 ```bash
-uv run ruff format --check .
-uv run ruff check .
-uv run pytest -q
-uv run mkdocs build --strict
+make check-all    # format + lint + mypy + pytest coverage + strict docs
 ```
 
-To capture coverage locally (the same command CI uses):
+PR-sized gate without the docs build:
 
 ```bash
-uv run pytest --cov=atlantis --cov-report=term-missing -q
+make check        # format-check + lint + typecheck + test-cov
 ```
+
+| Make target | Equivalent `uv run` command |
+|-------------|---------------------------|
+| `make format-check` | `uv run ruff format --check .` |
+| `make lint` | `uv run ruff check .` |
+| `make typecheck` | `uv run mypy atlantis` |
+| `make test` | `uv run pytest -q` (offscreen env set by Makefile) |
+| `make test-cov` | `uv run pytest --cov=atlantis --cov-report=term-missing --cov-report=xml -q` |
+| `make docs` | `uv run mkdocs build --strict` |
+| `make pre-commit` | `uv run pre-commit run --all-files` |
+| `make bundle-smoke` | `uv sync --group packaging` then PyInstaller build + bundled `--smoke-test` (opt-in; not in CI PR gate) |
+
+On systems without GNU Make, run the `uv run` commands from the table directly (export `QT_QPA_PLATFORM=offscreen` and `ATLANTIS_HEADLESS=1` for pytest).
+
+## Release checklist (maintainers)
+
+1. `make check-all` green on the release platform.
+2. Update `CHANGELOG.md` and bump `version` in `pyproject.toml`.
+3. `uv build` — confirm the wheel lists `atlantis/assets` (e.g. `unzip -l dist/*.whl | grep mermaid`).
+4. (Optional, Linux) `uv sync --group packaging` and `make bundle-smoke`, or run **Actions → Bundle Linux (experimental)** for a CI-built artifact (see [Installation → CI-built Linux bundle](user-guide/installation.md#ci-built-linux-bundle)).
+5. Tag `vX.Y.Z` and push; publish GitHub Release artifacts when automation exists.
+
+See [Installation → Experimental Linux bundle](user-guide/installation.md#experimental-linux-bundle-pyinstaller) for bundle details.
 
 To exercise the real `QWebEngineView` runtime (skipped by default — requires a desktop Qt session, not a headless CI image):
 
 ```bash
-ATLANTIS_WEBENGINE_TESTS=1 uv run pytest -m webengine -q
+make webengine
+# or: ATLANTIS_WEBENGINE_TESTS=1 uv run pytest -m webengine -q
 ```
+
+See [Troubleshooting → Opt-in WebEngine pytest](user-guide/troubleshooting.md#opt-in-webengine-pytest-pytestmarkwebengine) for display-server, CDN, and macOS pin requirements.
+
+### CI workflows
+
+| Workflow | When it runs | What it does |
+|----------|----------------|--------------|
+| `ci.yml` | PRs + pushes to `main` | Ruff, pytest + coverage, mypy (blocking), opt-in macOS WebEngine smoke (`workflow_dispatch` only) |
+| `docs.yml` | PRs + pushes to `main` | `mkdocs build --strict`; publishes `site/` to GitHub Pages on `main` pushes only |
+| `bundle.yml` | `workflow_dispatch` only | Linux PyInstaller `make bundle-smoke`; uploads `dist/atlantis/` artifact (not on PR gate) |
+
+Docs are validated once in `docs.yml` (not duplicated in `ci.yml`).
 
 ## Test conventions
 
@@ -63,7 +96,7 @@ ATLANTIS_WEBENGINE_TESTS=1 uv run pytest -m webengine -q
 
 ## Pre-commit policy
 
-`.pre-commit-config.yaml` ships the same `ruff` + `ruff-format` versions that CI's lint job uses, plus a small set of hygiene hooks (trailing whitespace, EOF newline, merge-conflict markers, YAML/TOML validation, line endings). The mypy hook is intentionally **deferred** until the chronic Qt typing noise is cleaned up; once that lands, the hook is added here and the CI mypy job is flipped to blocking.
+`.pre-commit-config.yaml` ships the same `ruff` + `ruff-format` versions that CI's lint job uses, a **mypy** hook (`uv run mypy atlantis`), plus hygiene hooks (trailing whitespace, EOF newline, merge-conflict markers, YAML/TOML validation, line endings). Qt accessor narrowing lives in `atlantis/ui/qt_accessors.py` so UI code stays strict without blanket `# type: ignore`.
 
 ## Documentation changes
 

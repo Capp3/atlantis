@@ -33,21 +33,13 @@ jobs:
           uv sync --python 3.12 --all-extras
 
       - name: Ruff format check
-        run: uv run ruff format --check .
+        run: make format-check
 
       - name: Ruff lint
-        run: uv run ruff check .
+        run: make lint
 
       - name: Pytest with coverage
-        env:
-          QT_QPA_PLATFORM: offscreen
-          ATLANTIS_HEADLESS: "1"
-        run: |
-          uv run pytest \
-            --cov=atlantis \
-            --cov-report=term-missing \
-            --cov-report=xml \
-            -q
+        run: make test-cov
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v5
@@ -58,9 +50,8 @@ jobs:
           CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
 
   type-check:
-    name: Type check (non-blocking)
+    name: Type check
     runs-on: ubuntu-latest
-    continue-on-error: true
     steps:
       - name: Checkout repository
         uses: actions/checkout@v5
@@ -76,27 +67,7 @@ jobs:
           uv sync --python 3.12 --all-extras
 
       - name: Mypy
-        run: uv run mypy atlantis
-
-  docs-build:
-    name: Docs strict build
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v5
-
-      - name: Set up Python 3.12
-        uses: actions/setup-python@v6
-        with:
-          python-version: "3.12"
-
-      - name: Install uv + sync project
-        run: |
-          python -m pip install -U pip setuptools uv
-          uv sync --python 3.12 --all-extras
-
-      - name: mkdocs build --strict
-        run: uv run mkdocs build --strict
+        run: make typecheck
 
   macos-smoke:
     name: macOS WebEngine smoke (opt-in)
@@ -120,4 +91,4 @@ jobs:
         env:
           QT_QPA_PLATFORM: offscreen
           ATLANTIS_HEADLESS: "1"
-        run: uv run pytest -q
+        run: make test

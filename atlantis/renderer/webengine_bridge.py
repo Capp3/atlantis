@@ -14,12 +14,21 @@ import time
 from dataclasses import dataclass
 from typing import Any
 
-from PyQt6.QtCore import QObject, QTimer, QUrl, pyqtSignal, pyqtSlot
+from PyQt6.QtCore import QObject, QTimer, pyqtSignal, pyqtSlot
 
-logger = logging.getLogger(__name__)
-
-MERMAID_VERSION = "10.9.3"
-MERMAID_CDN = f"https://cdn.jsdelivr.net/npm/mermaid@{MERMAID_VERSION}/dist/mermaid.min.js"
+from atlantis.renderer.logging_events import (
+    BRIDGE_LOGGER,
+    log_event,
+    mermaid_src_label,
+    truncate_error,
+)
+from atlantis.renderer.mermaid_assets import (
+    MERMAID_CDN,
+    MERMAID_VERSION,
+    PreviewAssetSession,
+    mermaid_script_src,
+    preview_shell_template,
+)
 
 _RENDER_TIMEOUT_MS = 15_000
 
@@ -67,7 +76,7 @@ class WebEngineMermaidBridge(QObject):
         page: Any,
         *,
         theme: str = "default",
-        cdn_url: str = MERMAID_CDN,
+        cdn_url: str | None = None,
         timeout_ms: int = _RENDER_TIMEOUT_MS,
     ) -> None:
         super().__init__(page)
@@ -75,8 +84,10 @@ class WebEngineMermaidBridge(QObject):
 
         self._page = page
         self._theme = theme
-        self._cdn_url = cdn_url
+        self._mermaid_script_src = cdn_url if cdn_url is not None else mermaid_script_src()
         self._timeout_ms = timeout_ms
+        self._asset_session = PreviewAssetSession()
+        self.destroyed.connect(self._asset_session.close)
 
         self._channel = QWebChannel(self)
         self._inner = _BridgeChannel(self)
@@ -101,6 +112,13 @@ class WebEngineMermaidBridge(QObject):
         if self._timeout_ms > 0:
             self._timeout_timer.start(self._timeout_ms)
         if self._page_ready:
+            log_event(
+                BRIDGE_LOGGER,
+                logging.DEBUG,
+                "render_dispatch",
+                source_chars=len(source),
+                page_ready=True,
+            )
             self._dispatch_render(source)
 
     def set_theme(self, theme: str) -> None:
@@ -109,72 +127,37 @@ class WebEngineMermaidBridge(QObject):
 
     def _install_shell(self) -> None:
         self._page_ready = False
+        log_event(
+            BRIDGE_LOGGER,
+            logging.DEBUG,
+            "shell_install",
+            mermaid_src=mermaid_src_label(self._mermaid_script_src),
+            theme=self._theme,
+        )
         html = self._build_shell_html()
-        self._page.setHtml(html, QUrl("https://atlantis.local/preview"))
+        self._page.setHtml(html, self._asset_session.base_url)
 
     def _build_shell_html(self) -> str:
-        theme = json.dumps(self._theme)
-        cdn = self._cdn_url
-        return f"""<!DOCTYPE html>
-<html lang=\"en\">
-<head>
-  <meta charset=\"utf-8\"/>
-  <style>
-    html, body {{ margin: 0; padding: 0; background: transparent; }}
-    #atlantis-output {{ padding: 8px; font-family: -apple-system, system-ui, sans-serif; }}
-    #atlantis-output svg {{ max-width: 100%; height: auto; }}
-  </style>
-  <script src=\"qrc:///qtwebchannel/qwebchannel.js\"></script>
-  <script src=\"{cdn}\"></script>
-</head>
-<body>
-<div id=\"atlantis-output\"></div>
-<script>
-const ATLANTIS_THEME = {theme};
-let ATLANTIS_INITIALIZED = false;
-let ATLANTIS_BRIDGE = null;
-
-function atlantisInit() {{
-  if (ATLANTIS_INITIALIZED) {{ return Promise.resolve(); }}
-  try {{
-    mermaid.initialize({{ startOnLoad: false, securityLevel: "loose", theme: ATLANTIS_THEME }});
-    ATLANTIS_INITIALIZED = true;
-    return Promise.resolve();
-  }} catch (e) {{
-    return Promise.reject(e);
-  }}
-}}
-
-async function atlantisRender(source) {{
-  try {{
-    await atlantisInit();
-    const id = "atlantis-" + Math.random().toString(36).slice(2);
-    const result = await mermaid.render(id, source);
-    document.getElementById("atlantis-output").innerHTML = result.svg;
-    if (ATLANTIS_BRIDGE) {{ ATLANTIS_BRIDGE.report_svg(result.svg); }}
-  }} catch (e) {{
-    const msg = (e && e.message) ? e.message : String(e);
-    if (ATLANTIS_BRIDGE) {{ ATLANTIS_BRIDGE.report_error(msg); }}
-  }}
-}}
-
-document.addEventListener("DOMContentLoaded", function () {{
-  new QWebChannel(qt.webChannelTransport, function (channel) {{
-    ATLANTIS_BRIDGE = channel.objects.bridge;
-    ATLANTIS_BRIDGE.report_ready();
-  }});
-}});
-</script>
-</body>
-</html>
-"""
+        theme_json = json.dumps(self._theme)
+        return (
+            preview_shell_template()
+            .replace("{{MERMAID_SCRIPT_SRC}}", self._mermaid_script_src)
+            .replace("{{THEME_JSON}}", theme_json)
+        )
 
     def _on_load_finished(self, ok: bool) -> None:
         self._page_ready = bool(ok)
         if not ok:
-            logger.warning("WebEngine preview page failed to load shell")
+            log_event(BRIDGE_LOGGER, logging.WARNING, "shell_load_failed", page_ready=False)
             return
         if self._pending_source is not None:
+            log_event(
+                BRIDGE_LOGGER,
+                logging.DEBUG,
+                "render_dispatch",
+                source_chars=len(self._pending_source),
+                page_ready=True,
+            )
             self._dispatch_render(self._pending_source)
 
     def _dispatch_render(self, source: str) -> None:
@@ -183,10 +166,28 @@ document.addEventListener("DOMContentLoaded", function () {{
 
     def _on_rendered(self, ok: bool, payload: str) -> None:
         elapsed_ms = 0.0 if self._render_start is None else (time.perf_counter() - self._render_start) * 1000.0
+        source_chars = len(self._pending_source) if self._pending_source else 0
         self._render_start = None
         self._pending_source = None
         if self._timeout_timer.isActive():
             self._timeout_timer.stop()
+        if ok:
+            log_event(
+                BRIDGE_LOGGER,
+                logging.INFO,
+                "render_success",
+                elapsed_ms=elapsed_ms,
+                source_chars=source_chars,
+            )
+        else:
+            log_event(
+                BRIDGE_LOGGER,
+                logging.WARNING,
+                "render_error",
+                elapsed_ms=elapsed_ms,
+                source_chars=source_chars,
+                error=truncate_error(payload),
+            )
         self.renderFinished.emit(BridgeRenderResult(ok=ok, payload=payload, elapsed_ms=elapsed_ms))
 
     def _on_timeout(self) -> None:
@@ -195,6 +196,15 @@ document.addEventListener("DOMContentLoaded", function () {{
         elapsed_ms = (time.perf_counter() - self._render_start) * 1000.0
         self._render_start = None
         self._pending_source = None
+        log_event(BRIDGE_LOGGER, logging.WARNING, "render_timeout", elapsed_ms=elapsed_ms)
         self.renderFinished.emit(
             BridgeRenderResult(ok=False, payload="Render timed out", elapsed_ms=elapsed_ms),
         )
+
+
+__all__ = [
+    "MERMAID_CDN",
+    "MERMAID_VERSION",
+    "BridgeRenderResult",
+    "WebEngineMermaidBridge",
+]

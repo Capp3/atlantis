@@ -59,5 +59,5 @@ Atlantis writes logs to the platform-standard app-data path and streams the same
 ## Next steps
 
 - Read the [Editor guide](user-guide/editor.md) to learn the shortcuts, autosave behaviour, and recent-files workflow.
-- See [Front matter](user-guide/front-matter.md) for YAML/TOML support.
+- See [Front matter](user-guide/front-matter.md) for YAML/TOML support and **View → Edit Front Matter…** for TOML metadata.
 - See the [Examples gallery](user-guide/examples.md) for working diagrams you can paste into the editor.

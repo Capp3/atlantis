@@ -1,52 +1,75 @@
-name: Publish site
+name: Docs
 
 on:
-  workflow_dispatch:
+  pull_request:
   push:
     branches:
       - main
-    #paths: # Recommended to avoid extra builds
-    #  - .github/workflows/docs.yml # Change name to what your workflow file is
-    #  - docs/**
-    #  - mkdocs.yml
-    #  - requirements.txt
+  workflow_dispatch:
 
 permissions:
   contents: read
-  pages: write
-  id-token: write
 
 concurrency:
-  group: github-pages
-  cancel-in-progress: false
+  group: docs-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
-  buildAndPublish:
+  build:
+    name: Build docs (strict)
     runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Install uv + sync project
+        run: |
+          python -m pip install -U pip setuptools uv
+          uv sync --python 3.12 --all-extras
+
+      - name: mkdocs build --strict
+        run: make docs
+
+      - name: Upload site artifact
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: actions/upload-artifact@v4
+        with:
+          name: mkdocs-site
+          path: site/
+
+  deploy:
+    name: Publish to GitHub Pages
+    needs: build
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v5
+      - name: Download site artifact
+        uses: actions/download-artifact@v4
         with:
-          fetch-depth: 0
-      - name: Setup Python 3.12
-        uses: actions/setup-python@v6
-        with:
-          python-version: 3.12
-      - name: Install dependencies
-        run: |
-          python -m pip install -U pip setuptools uv
-          uv sync --python 3.12 --all-extras
-      - name: Build Pages
-        run: uv run mkdocs build
-      - name: Configure GitHub Pages.
+          name: mkdocs-site
+          path: site
+
+      - name: Configure GitHub Pages
         uses: actions/configure-pages@v6
-      - name: Upload Pages Artifact
+
+      - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v5
         with:
-          path: docs/
+          path: site
+
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v5

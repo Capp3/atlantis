@@ -15,7 +15,9 @@ Atlantis uses [`uv`](https://github.com/astral-sh/uv) as the standard tool for P
 - Add dependencies: `uv add <package>`
 - Add dev dependencies: `uv add --dev <package>`
 
-## Quickstart
+## Install
+
+**Recommended:** clone the repo and use `uv` (Python 3.12+). See [Installation](docs/user-guide/installation.md) for wheels and the experimental PyInstaller bundle.
 
 ```bash
 uv sync
@@ -26,27 +28,31 @@ uv run atlantis --smoke-test # headless boot/exit (used by CI)
 ## Running the test suite
 
 ```bash
-uv run pytest -q                                # default suite (offscreen, headless)
-uv run pytest --cov=atlantis --cov-report=term-missing
-ATLANTIS_WEBENGINE_TESTS=1 uv run pytest -m webengine -q   # opt-in WebEngine smoke
+make check              # PR gate: format + lint + mypy + coverage (matches CI)
+make check-all          # above + strict docs build
+make test               # pytest only (offscreen)
+make webengine          # opt-in WebEngine smoke (desktop Qt)
 ```
+
+Equivalent `uv run` commands are listed in `docs/contributing.md`.
 
 ## Contributing
 
 Install hooks once after cloning:
 
 ```bash
+uv sync
 uv run pre-commit install
-uv run pre-commit run --all-files
+make pre-commit         # or: uv run pre-commit run --all-files
 ```
 
-See `docs/contributing.md` for the full contributor loop (lint → tests → docs → pre-commit). Recommended VS Code tasks are pre-configured under `.vscode/tasks.json` (`Ruff Fix`, `Run Tests`, `Coverage`, `Pre-commit (all files)`, `Build Docs (strict)`, `Serve Docs`).
+See `docs/contributing.md` for the full contributor loop. VS Code tasks under `.vscode/tasks.json` include **Check (PR gate)** (`make check`) and individual gate tasks using `uv run`.
 
 ## Documentation
 
 The full documentation site (built with MkDocs + mkdocstrings) is published at <https://capp3.github.io/atlantis/>. Build it locally with:
 
 ```bash
-uv run mkdocs serve            # live-reload preview
-uv run mkdocs build --strict   # CI-equivalent strict build
+make docs-serve                # live-reload preview
+make docs                      # CI-equivalent strict build
 ```

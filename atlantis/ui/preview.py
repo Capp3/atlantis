@@ -5,14 +5,18 @@ from __future__ import annotations
 import logging
 import os
 from collections.abc import Callable
+from typing import TYPE_CHECKING
 
 from PyQt6.QtCore import pyqtSignal
 from PyQt6.QtWidgets import QTextEdit, QVBoxLayout, QWidget
 
-try:
+if TYPE_CHECKING:
     from PyQt6.QtWebEngineWidgets import QWebEngineView
-except ImportError:  # pragma: no cover - fallback only used when deps are missing
-    QWebEngineView = None  # type: ignore[assignment]
+else:
+    try:
+        from PyQt6.QtWebEngineWidgets import QWebEngineView
+    except ImportError:  # pragma: no cover - fallback only used when deps are missing
+        QWebEngineView = None  # type: ignore[misc, assignment]
 
 from atlantis.renderer.webengine_bridge import BridgeRenderResult, WebEngineMermaidBridge
 
@@ -35,6 +39,9 @@ class PreviewPane(QWidget):
         self._layout.setContentsMargins(0, 0, 0, 0)
 
         if self._use_webengine:
+            if QWebEngineView is None:
+                msg = "QWebEngineView is unavailable despite _use_webengine"
+                raise RuntimeError(msg)
             view = QWebEngineView(self)
             self._backend: QWebEngineView | QTextEdit = view
             self._bridge = WebEngineMermaidBridge(view.page(), theme=self._theme)

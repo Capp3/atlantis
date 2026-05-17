@@ -12,7 +12,7 @@ from atlantis.core.settings import APP_NAME, ORG_NAME
 def create_application() -> QApplication:
     """Return an existing QApplication instance or create a new one."""
     app = QApplication.instance()
-    if app is not None:
+    if isinstance(app, QApplication):
         return app
 
     created_app = QApplication(sys.argv)

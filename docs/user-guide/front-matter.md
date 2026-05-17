@@ -2,6 +2,18 @@
 
 Mermaid documents may begin with a YAML (`---`) or TOML (`+++`) fenced front matter block. Atlantis preserves the original text on save and never blocks editing on a malformed block — invalid TOML and YAML-without-parser cases surface as non-blocking warnings in the status bar.
 
+## Menu editor (TOML)
+
+Use **View → Edit Front Matter…** (`Ctrl+Shift+M`) to edit TOML metadata as key/value fields, fix invalid TOML in a raw inner editor, or add a new TOML block when the document has none.
+
+| Document | Dialog behaviour |
+|----------|------------------|
+| TOML (`+++`) | Form editor for top-level keys and one-level `[tables]`; OK re-emits the fenced block |
+| YAML (`---`) | Read-only preview; edit in the source editor |
+| No front matter | Create a default TOML block (e.g. `title = ""`) |
+
+**Important:** Saving from the dialog **re-serializes** TOML (comments and key order may change). Editing the source directly still round-trips verbatim on file save.
+
 ## Supported formats
 
 | Fence | Format | Parser |

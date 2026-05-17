@@ -74,10 +74,12 @@ markdown_extensions:
 nav:
   - Home: index.md
   - Getting Started: getting-started.md
+  - Installation: user-guide/installation.md
   - User Guide:
       - Editor: user-guide/editor.md
       - Renderer: user-guide/renderer.md
       - Front matter: user-guide/front-matter.md
+      - Plugins: user-guide/plugins.md
       - Examples: user-guide/examples.md
       - Troubleshooting: user-guide/troubleshooting.md
   - Reference:
@@ -87,6 +89,8 @@ nav:
   - ADRs:
       - 0001 — Mermaid via CDN for MVP: adr/0001-mermaid-cdn-mvp.md
       - 0002 — PyQt6 pin for macOS 12: adr/0002-pyqt6-pin-macos-12.md
+      - 0003 — Offline Mermaid bundle: adr/0003-mermaid-offline-bundle.md
+      - 0004 — Native bundle (PyInstaller): adr/0004-native-bundle-pyinstaller.md
   - Contributing: contributing.md
 
 extra:

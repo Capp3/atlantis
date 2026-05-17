@@ -1,149 +1,64 @@
-# =============================================================================
-# Vibe Dev Template Makefile
-# =============================================================================
+# Atlantis development Makefile — canonical local quality gates (mirrors CI).
+# Equivalent uv run commands: docs/contributing.md
+# Optional Vibe template tooling: make -f Makefile.vibe help
 
-# Automatic hostname detection
-DETECTED_HOST := $(shell hostname)
-HOST ?= $(DETECTED_HOST)
+UV ?= uv
 
-# Directories
-SCRIPTS_DIR := ./scripts
-TEMP_DIR := ./temp
-USERNAME := $(USER)
+export QT_QPA_PLATFORM ?= offscreen
+export ATLANTIS_HEADLESS ?= 1
 
-# Shell
-SHELL := /bin/bash
-
-# Enable better error handling
-.ONESHELL:
-.SHELLFLAGS := -e -u -o pipefail -c
-
-# Default target
 .DEFAULT_GOAL := help
 
-# Phony targets (targets that don't represent files)
-.PHONY: help post-install update-memory-bank install-memory-bank update-rules install-rules vibe clean install setup build serve
+.PHONY: help sync format format-check lint lint-fix typecheck test test-cov docs docs-serve pre-commit check check-all webengine bundle bundle-smoke clean
 
-# =============================================================================
-# Help Target
-# =============================================================================
+help: ## Show available targets
+	@grep -hE '^[a-zA-Z0-9_.-]+:.*##' $(MAKEFILE_LIST) | sed -e 's/:.*## */ | /' | column -t -s '|' 2>/dev/null || grep -hE '^[a-zA-Z0-9_.-]+:.*##' $(MAKEFILE_LIST) | sed -e 's/:.*## */ - /'
 
-help: ## Show this help message
-	@echo "Available targets:"
-	@fgrep -h "##" $(MAKEFILE_LIST) | grep -v fgrep | sed -e 's/\([^:]*\):[^#]*##\(.*\)/  \1|\2/' | column -t -s '|'
+sync: ## Install/sync dependencies with uv
+	$(UV) sync
 
-# =============================================================================
-# Cleanup Targets
-# =============================================================================
+format: ## Apply ruff formatter
+	$(UV) run ruff format .
 
-clean: ## Remove temporary directories and files
-	@echo "Cleaning up temporary files..."
-	@rm -rf $(TEMP_DIR)
-	@rm -rf $(SCRIPTS_DIR)
-	@echo "Cleanup complete."
+format-check: ## Check formatting (CI)
+	$(UV) run ruff format --check .
 
-post-install: ## Clean up after installation
-	@echo "Running post-install cleanup..."
-	@rm -rf $(SCRIPTS_DIR) 2>/dev/null || true
-	@rm -rf $(TEMP_DIR) 2>/dev/null || true
-	@echo "Post-install cleanup complete."
+lint: ## Run ruff linter (CI)
+	$(UV) run ruff check .
 
-# =============================================================================
-# Cursor Memory Bank
-# =============================================================================
-# Source: https://github.com/vanzan01/cursor-memory-bank
-# Provides AI-powered development commands and rules for Cursor IDE
+lint-fix: ## Run ruff linter with auto-fix
+	$(UV) run ruff check . --fix
 
-update-memory-bank: ## Update the memory bank commands and rules
-	@echo "Updating Cursor Memory Bank..."
-	@mkdir -p $(TEMP_DIR)
-	@if git clone --depth 1 https://github.com/vanzan01/cursor-memory-bank.git $(TEMP_DIR)/cursor-memory-bank 2>/dev/null; then \
-		echo "Successfully cloned cursor-memory-bank repository"; \
-		if [ -d "$(TEMP_DIR)/cursor-memory-bank/.cursor/commands" ]; then \
-			mkdir -p .cursor/commands; \
-			cp -R $(TEMP_DIR)/cursor-memory-bank/.cursor/commands/* .cursor/commands/ && \
-			echo "Commands updated successfully"; \
-		else \
-			echo "Warning: Commands directory not found in repository"; \
-		fi; \
-		if [ -d "$(TEMP_DIR)/cursor-memory-bank/.cursor/rules/isolation_rules" ]; then \
-			mkdir -p .cursor/rules/isolation_rules; \
-			cp -R $(TEMP_DIR)/cursor-memory-bank/.cursor/rules/isolation_rules/* .cursor/rules/isolation_rules/ && \
-			echo "Isolation rules updated successfully"; \
-		else \
-			echo "Warning: Isolation rules directory not found in repository"; \
-		fi; \
-		rm -rf $(TEMP_DIR)/cursor-memory-bank; \
-		echo "Memory bank update complete."; \
-	else \
-		echo "Error: Failed to clone cursor-memory-bank repository"; \
-		echo "Please check your internet connection and try again"; \
-		exit 1; \
-	fi
+typecheck: ## Run mypy on atlantis (CI)
+	$(UV) run mypy atlantis
 
-install-memory-bank: update-memory-bank ## Install the memory bank commands and rules (alias for update)
+test: ## Run pytest default suite (offscreen)
+	$(UV) run pytest -q
 
-# =============================================================================
-# Awesome Cursor Rules
-# =============================================================================
-# Source: https://github.com/PatrickJS/awesome-cursorrules
-# Collection of cursor rules for various frameworks and languages
+test-cov: ## Run pytest with coverage (CI)
+	$(UV) run pytest --cov=atlantis --cov-report=term-missing --cov-report=xml -q
 
-update-rules: ## Update cursor rules for frameworks and languages
-	@echo "Updating Awesome Cursor Rules..."
-	@mkdir -p $(TEMP_DIR)
-	@if git clone --depth 1 https://github.com/PatrickJS/awesome-cursorrules.git $(TEMP_DIR)/awesome-cursorrules 2>/dev/null; then \
-		echo "Successfully cloned awesome-cursorrules repository"; \
-		if [ -d "$(TEMP_DIR)/awesome-cursorrules/rules-new" ]; then \
-			mkdir -p .cursor/rules; \
-			cp -R $(TEMP_DIR)/awesome-cursorrules/rules-new/* .cursor/rules/ && \
-			echo "Rules updated successfully"; \
-		else \
-			echo "Warning: Rules directory not found in repository"; \
-		fi; \
-		rm -rf $(TEMP_DIR)/awesome-cursorrules; \
-		echo "Rules update complete."; \
-	else \
-		echo "Error: Failed to clone awesome-cursorrules repository"; \
-		echo "Please check your internet connection and try again"; \
-		exit 1; \
-	fi
+docs: ## Build documentation strict (CI docs job)
+	$(UV) run mkdocs build --strict
 
-install-rules: update-rules ## Install cursor rules (alias for update)
+docs-serve: ## Serve documentation with live reload
+	$(UV) run mkdocs serve
 
-vibe: install-rules install-memory-bank ## Install both cursor rules and memory bank
-	@echo ""
-	@echo "=========================================="
-	@echo "Vibe setup complete!"
-	@echo "=========================================="
-	@echo "Installed:"
-	@echo "  - Cursor Memory Bank (commands & rules)"
-	@echo "  - Awesome Cursor Rules (framework rules)"
-	@echo ""
-	@echo "Please restart Cursor IDE to load the new configurations."
-	@echo ""
+pre-commit: ## Run all pre-commit hooks
+	$(UV) run pre-commit run --all-files
 
-install: # Install uv package manager
-	@echo "Installing uv..."
-	curl -LsSf https://astral.sh/uv/install.sh | sh
-	@echo "uv installed successfully!"
+check: format-check lint typecheck test-cov ## PR gate: format + lint + type + test+cov
 
-# Create virtual environment with uv
-setup:
-	@echo "Creating virtual environment with uv..."
-	uv venv
-	@echo "Virtual environment created!"
+check-all: check docs ## Full loop: PR gate + strict docs
 
-serve: # Start MkDocs development server using uvx (no local install needed)
-	@echo "Starting MkDocs development server..."
-	uvx mkdocs serve
+webengine: ## Opt-in WebEngine tests (desktop Qt; set ATLANTIS_WEBENGINE_TESTS=1)
+	ATLANTIS_WEBENGINE_TESTS=1 $(UV) run pytest -m webengine -q
 
-build: # Build MkDocs static site using uvx
-	@echo "Building MkDocs static site..."
-	uvx mkdocs build
+bundle: ## Build PyInstaller one-folder dist (requires: uv sync --group packaging)
+	$(UV) run pyinstaller --noconfirm --distpath dist --workpath build/pyinstaller packaging/pyinstaller/atlantis.spec
 
-clean: # Clean build artifacts
-	@echo "Cleaning build artifacts..."
-	rm -rf site/
-	rm -rf .cache/
-	@echo "Clean complete!"
+bundle-smoke: bundle ## Run smoke-test on bundled binary (offscreen)
+	dist/atlantis/atlantis --smoke-test
+
+clean: ## Remove build artifacts and test caches
+	rm -rf site/ .cache/ .pytest_cache/ htmlcov/ .coverage coverage.xml dist/ build/pyinstaller/

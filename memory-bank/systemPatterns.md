@@ -30,6 +30,7 @@ Atlantis follows a classic desktop MVC-inspired pattern adapted for PyQt6:
 - Per-document autosave in OS temp dir (configurable).
 - Window state + recent files in QSettings (or JSON).
 - No central project DB; pure file-based.
+- **`FileSession`** owns the active document path; **`QTextDocument.isModified()`** owns dirty state (no duplicate flag). **`RecentFilesRegistry`** and **`DocumentFileWatcher`** sit in `atlantis/model/`.
 
 ## Security/Offline
 - No network in final build (local Mermaid bundle, local-only plugins).

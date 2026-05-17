@@ -13,10 +13,11 @@
 
 ## Mermaid Integration
 - Embedded via Qt WebEngine (`QWebEngineView`)
-- **MVP**: Mermaid.js loaded from CDN (pinned version below); offline bundle deferred (see `memory-bank/creative/creative-renderer-offline-bundle.md`)
-- **Pinned CDN (tech validation + future renderer work)**: `https://cdn.jsdelivr.net/npm/mermaid@10.9.3/dist/mermaid.min.js` (Mermaid **10.9.3**)
+- **Default**: Mermaid **10.9.3** vendored at `atlantis/assets/vendor/mermaid/mermaid.min.js` (offline preview; see ADR `docs/adr/0003-mermaid-offline-bundle.md`)
+- **CDN fallback**: `ATLANTIS_USE_MERMAID_CDN=1` → `https://cdn.jsdelivr.net/npm/mermaid@10.9.3/dist/mermaid.min.js`
 - Rendering: `mermaid.initialize({ startOnLoad: false, securityLevel: "loose" })` then `mermaid.render(id, source)` in page JS; results returned to Python via **QWebChannel** on a small `QObject` bridge (`report_svg` / `report_error` slots)
 - **JS diagnostics**: subclass `QWebEnginePage` and override `javaScriptConsoleMessage` (PyQt6 does not expose console output as a connectable signal on the default page)
+- **Structured renderer logs**: `atlantis.renderer.bridge` and `atlantis.renderer.assets` emit `event=…` lines (`shell_install`, `render_success`, `render_error`, `render_timeout`, etc.); use `--log-level DEBUG` for diagnosis
 - Editor-driven preview in the app remains debounced (500ms default) once the production bridge replaces the placeholder renderer
 
 ## Technology Validation PoC (committed)
@@ -42,7 +43,10 @@
 - OS Target: macOS primary for MVP (darwin), cross-platform later
 - **macOS 12.x note**: PyQt6 / PyQt6-WebEngine pinned to **>=6.7,<6.10** (newer wheels may require macOS 13+)
 - Runtime deps: stdlib + PyQt6 + PyQt6-WebEngine (dev deps in pyproject dependency-groups)
-- Strict quality gates: ruff + pytest required before merges; mypy on `atlantis/` (see known legacy noise in some UI modules — do not regress new code)
+- Strict quality gates: ruff + pytest + **blocking mypy** on `atlantis/` (Qt accessors narrowed via `atlantis/ui/qt_accessors.py`)
+- **Canonical local gate**: `make check` (PR) / `make check-all` (+ docs); CI workflows call the same Makefile targets
+- **Optional native bundle**: `uv sync --group packaging` then `make bundle` / `make bundle-smoke` (PyInstaller one-folder; ADR `docs/adr/0004-native-bundle-pyinstaller.md`)
+- **Plugins (v1 scaffold)**: `atlantis/plugins/` — `PluginRegistry` + manifest types; no dynamic loader
 
 ## Headless / CI Policy
 - **`ATLANTIS_HEADLESS=1`**: App tests use text preview fallback instead of WebEngine where applicable

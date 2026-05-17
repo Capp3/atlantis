@@ -1,0 +1,36 @@
+name: Bundle Linux (experimental)
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  bundle-smoke:
+    name: PyInstaller bundle + smoke test
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Install uv + sync packaging group
+        run: |
+          python -m pip install -U pip setuptools uv
+          uv sync --python 3.12 --group packaging
+
+      - name: Build bundle and run smoke test
+        run: make bundle-smoke
+
+      - name: Upload Linux bundle artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: atlantis-linux-bundle-${{ github.run_number }}
+          path: dist/atlantis/
+          retention-days: 14
