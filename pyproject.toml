@@ -16,7 +16,7 @@ classifiers = [
     "Topic :: Software Development :: Libraries :: Python Modules",
 ]
 dependencies = [
-    "PyQt6>=6.7.0,<6.10.0",
+    "PyQt6>=6.11.0,<6.12.0",
     "PyQt6-WebEngine>=6.7.0,<6.10.0",
     "tomli-w>=1.2.0",
 ]
